@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<conf ignoreLineType="no" resultEncoding="UTF-8" lineIdSize="1">
+    <line role="header" type="1">
+        <field display="ID_EMPRESA" type="DECIMAL" name="ID_EMPRESA" length="12"/>
+    </line>
+    <line role="default" type="2">
+        <field display="TESTINT" type="INTEGER" name="TESTINT" length="11"/>
+        <field display="testDefault" type="INTEGER" name="testDefault" length="11"/>
+        <field display="PAG_ID" type="TEXT" name="PAG_ID" length="12"/>
+        <field display="MONEDA" type="TEXT" name="MONEDA" length="12"/>
+    </line>
+    <line role="footer" type="3">
+        <field validation="ddMMyyyy" display="testFooter" type="DATE" name="testFooter" length="8"/>
+        <field display="TESTFOOTER" type="REGEXP" name="TESTFOOTER" length="11"/>
+    </line>
+</conf>
