@@ -1,0 +1,692 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflows>
+
+	<workflow id="default" xsl-path="../etc/xsls/validaciones_clientehr/default">
+
+		<if test="/request-context/request/message/header/msg_type = 'notificacion_pago'">
+			<goto workflow="notificacion_pago" />
+		</if>	
+		
+		<elseif test="/request-context/request/message/header/msg_type = 'notificacion_pago_conciliacion'">
+			<goto workflow="notificacion_pago_conciliacion" />
+		</elseif>
+		
+		<elseif test="/request-context/request/message/header/msg_type = 'consulta_deuda'">
+			<goto workflow="consulta_deuda" />
+		</elseif>
+
+		<elseif test="/request-context/request/message/header/msg_type = 'reversa_pago'">
+			<goto workflow="reversa_pago" />
+		</elseif>
+
+		<elseif test="/request-context/request/message/header/msg_type = 'val_cns_pago_forma'">
+			<goto workflow="consulta_pago" />
+		</elseif>
+
+		<elseif test="/request-context/request/message/header/msg_type = 'val_cns_pago_consistencia'">
+			<goto workflow="consulta_pagoc" />
+		</elseif>			
+			
+	</workflow>
+
+	<workflow id="reversa_pago" xsl-path="../etc/xsls/validaciones_clientehr/reversa_pago">
+
+			<!--Validaciones de contenido y longitud-->
+			<!--00-->
+			<if test="/request-context/request/message/body/id_trx_rev ='' or string-length(/request-context/request/message/body/id_trx_rev) >32">
+				<return id="error-id_trx_rev_vacio"/>	
+			</if>
+
+			<!--01-->
+			<if test="/request-context/request/message/body/id_trx_rec ='' or string-length(/request-context/request/message/body/id_trx_rec) >32">
+				<return id="error-id_trx_rec_vacio"/>	
+			</if>
+
+			<!--02-->
+			<if test="string-length(/request-context/request/message/body/id_trx_eft) >32">
+				<return id="error-id_trx_eft_vacio"/>	
+			</if>
+
+			<!--03-->
+			<if test="/request-context/request/message/body/id_trx_eft_rev ='' or  /request-context/request/message/body/id_trx_eft_rev/response/code != 0 ">
+				<return id="error-conexion-bd" />
+			</if>
+
+
+			<!--04-->
+			<service id="buscar_id_trx_rev" name="TRANS" description="Se valida el id trx del recaudador" />	
+			<if test="count(/request-context/services-responses/reversa_pago/buscar_id_trx_rev/response/data/Results/Row/EXISTE) > 0">		
+				<return id="error-id_trx_rev" />
+			</if>
+
+			<!--05-->
+			<if test="/request-context/request/message/body/company_id ='' or string-length(/request-context/request/message/body/company_id) >25">
+				<return id="error-company_id_vacio"/>			
+			</if>
+			
+			<!--06-->
+			<!--reverse_date-->
+			<echo id="valida_formato_iso8601" />
+
+			<if test="/request-context/services-responses/reversa_pago/valida_formato_iso8601/response/code != 0">
+				<return id="error-reverse_date_no_valido"/>
+			</if>
+
+
+			<!--07-->
+			<if test="/request-context/request/message/body/contract_id ='' or string-length(/request-context/request/message/body/contract_id) >20">
+				<return id="error-contract_id_vacio"/>			
+			</if>
+
+			<!--08-->
+			<if test="/request-context/request/message/body/collector_id ='' or string-length(/request-context/request/message/body/collector_id) >25">
+				<return id="error-collector_id_vacio"/>			
+			</if>
+
+			<!--09-->
+			<!--Agregar una validación de que debe ser númerico?, si viene texto el WS no debería dejarlo pasar-->
+			<if test="/request-context/request/message/body/total_amount ='' or string-length(/request-context/request/message/body/total_amount) >25">
+				<return id="error-total_amount_vacio"/>			
+			</if>
+				
+			<!--Validaciones del convenio-->	
+			<!--10-->	
+			<if test="/request-context/request/message/body/convenio/msg/code" not-equals="0">
+				<return id="error-convenio" />
+			</if>
+			
+			<!--11-->
+			<if test="/request-context/request/message/body/convenio/msg/convenio_habilitado" not-equals="0">
+				<return id="error-estado-convenio" />
+			</if>
+	
+			<!--12-->
+			<if test="/request-context/request/message/body/collector_id  != /request-context/request/message/body/convenio/msg/collector-id">
+				<return id="error-collector-agreement" />
+			</if>
+	
+			<!--13-->
+			<if test="/request-context/request/message/body/company_id != /request-context/request/message/body/convenio/msg/company-id">
+				<return id="error-company-agreement" />
+			</if>
+
+			<!--14-->
+			<!--Se valida si el convenio permite reversa-->
+			<if test="/request-context/request/message/body/convenio/msg/reglas_reversa/reversa != 1">
+				<return id="error-reversa" />		
+			</if>
+			<!--  Todas las validaciones OK -->
+			<return id="return" />
+
+
+	</workflow>
+	
+	<workflow id="consulta_deuda" xsl-path="../etc/xsls/validaciones_clientehr/consulta_deuda">
+
+		<!--Validaciones de contenido y longitud-->
+		<!--El 01 lo tenemos disponible-->
+
+		<!--id_trx_rec-->
+		<!--00-->
+		<if test="/request-context/request/message/body/id_trx_rec ='' or string-length(/request-context/request/message/body/id_trx_rec )>32">		
+			<return id="error-id_trx_rec_vacio" />
+		</if>
+
+		<!--company_id-->
+		<!--02-->
+		<if test="/request-context/request/message/body/company_id ='' or string-length(/request-context/request/message/body/company_id) >25">		
+			<return id="error-company_id_vacio" />
+		</if>
+
+		<!--collector_id-->
+		<!--03-->
+		<if test="/request-context/request/message/body/collector_id ='' or string-length(/request-context/request/message/body/collector_id) >25">		
+			<return id="error-collector_id_vacio" />
+		</if>
+
+		<!--date-->
+		<!--04-->
+		<echo id="valida_formato_iso8601" />
+
+		<if test="/request-context/services-responses/consulta_deuda/valida_formato_iso8601/response/code != 0">
+			<return id="error-date_no_valido"/>
+		</if>
+
+		<!--channel-->
+		<!--05-->
+		<if test="/request-context/request/message/body/channel ='' or string-length(/request-context/request/message/body/channel) >10">		
+			<return id="error-channel_vacio" />
+		</if>
+
+		<!--country_code-->
+		<!--06-->
+		<if test="/request-context/request/message/body/country_code ='' or string-length(/request-context/request/message/body/country_code) >2">		
+			<return id="error-country_code_vacio" />
+		</if>
+
+		<!--currency_code-->
+		<!--07-->
+		<if test="/request-context/request/message/body/currency_code ='' or string-length(/request-context/request/message/body/currency_code) >3">		
+			<return id="error-currency_code_vacio" />
+		</if>
+
+		<!--contract_id-->
+		<!--08-->
+		<if test="/request-context/request/message/body/contract_id ='' or string-length(/request-context/request/message/body/contract_id) >20">		
+			<return id="error-contract_id_vacio" />
+		</if>
+
+		<!--service_id-->
+		<!--09-->
+		<if test="string-length(/request-context/request/message/body/service_id) >32">		
+			<return id="error-service_id_largo" />
+		</if>
+
+		<!--client_id-->
+		<!--10-->
+		<if test="string-length(/request-context/request/message/body/client_id) >32">		
+			<return id="error-client_id_largo" />
+		</if>		
+
+		<!--11-->
+		<!--folio-->
+		<if test="string-length(/request-context/request/message/body/folio) >32">		
+			<return id="error-folio_largo" />
+		</if>
+
+		<!--service_type-->
+		<!--12-->
+		<if test="string-length(/request-context/request/message/body/service_type) >10">		
+			<return id="error-service_type_largo" />
+		</if>		
+
+		<!--Ya que estos valores no se utilizan para nada en la consulta no es necesario validarlos-->
+		<!--el document_id no lo vamos a validar-->
+		<!--el amount no lo vamos a validar-->
+
+		<!--Fin de validaciones de aplicacion-->
+
+		<!--comienzan las validaciones de negocio-->
+
+		<!--El No es posible validar si el id_trx_rec ya fue utilizado, ya que no se deja registro de la consulta de deuda, si se almacena la traza este panorama podría cambiar.-->
+
+		<service id="buscar_id_trx_rec" name="TRANS" description="Se valida el id trx del recaudador" />	
+			
+			<!--13-->
+		<if test="count(/request-context/services-responses/consulta_deuda/buscar_id_trx_rec/response/data/Results/Row/EXISTE) > 0">		
+				<return id="error-id_trx_rec" />
+		</if>
+
+		<!--13-->
+		<if test="/request-context/request/message/body/id_trx_eft ='' or  /request-context/request/message/body/id_trx_eft/response/code != 0 ">
+			<return id="error-conexion-bd" />
+		</if>
+
+		<!--14-->
+		<!--<if test="/request-context/request/message/body/convenio/agreements/code" not-equals="0">-->
+		<if test="/request-context/request/message/body/convenio/msg/code" not-equals="0">
+			<return id="error-convenio"/>
+		</if>
+		
+		<!--15-->	
+		<if test="/request-context/request/message/body/convenio/msg/convenio_habilitado" not-equals="0">
+			<return id="error-estado-convenio" />
+		</if>
+				
+		<!--16-->
+		<!--		
+		<if test="/request-context/request/message/body/collector_id  != /request-context/request/message/body/convenio/agreements/response/general/collector-code">-->
+		<if test="/request-context/request/message/body/collector_id  != /request-context/request/message/body/convenio/msg/collector-id">
+			<return id="error-collector-agreement" />
+		</if>
+
+		<!--17-->
+		<!--<if test="/request-context/request/message/body/company_id != /request-context/request/message/body/convenio/agreements/response/general/company-code">-->
+		<if test="/request-context/request/message/body/company_id != /request-context/request/message/body/convenio/msg/company-id">
+			<return id="error-company-agreement" />
+		</if>
+		
+		<!--18-->
+		<echo id="valida_canal"/>
+			<if test="/request-context/services-responses/consulta_deuda/valida_canal/response/code != 0">
+				<return id="error-channel_incorrecto"/>
+		</if>
+
+		<!--19-->
+		<!--<if test="/request-context/request/message/body/convenio/agreements/response/policies/collector-channel/consultadeuda/consulta_deuda/msg/moneda_deuda != /request-context/request/message/body/currency_code">-->
+		<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/moneda_deuda != /request-context/request/message/body/currency_code">
+			<return id="error-moneda" />		
+		</if>
+		
+		<!--20-->
+		<!--<if test="/request-context/request/message/body/convenio/agreements/response/policies/collector-channel/consultadeuda/consulta_deuda/msg/pais != /request-context/request/message/body/country_code">
+		     -->
+		<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/pais != /request-context/request/message/body/country_code">
+			<return id="error-pais" />		
+		</if>
+
+		<!--se validan los parametros en relacion a la politica seleccionada-->
+		<!--21-->
+		<!--<if test="/request-context/request/message/body/convenio/agreements/response/policies/collector-channel/consultadeuda/consulta_deuda/msg/politica =1 and /request-context/request/message/body/client_id =''">-->
+		<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/politica =1 and /request-context/request/message/body/client_id =''">
+			<return id="error-rut"/>
+		</if>
+
+		<!--22-->
+		<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/politica = 2 and /request-context/request/message/body/service_id =''">
+			<return id="error-id_servicio"/>
+		</if>
+
+		<!--23-->
+		<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/politica = 3 and (/request-context/request/message/body/service_id ='' or /request-context/request/message/body/folio ='')">
+			<return id="error-folio"/>
+		</if>
+
+		<!--Si llegamos a esta etapa se asume que ya se aprobaron las validaciones de que los parametros coinciden con la politica-->
+		<!--Se valida que el id de cliente o el id de servicio sean validos dependiendo de la poltica escogida-->
+		<!--24-->
+		<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/politica =1 and  /request-context/request/message/body/parametrosBD/HAY_ID_CLIENTE = 2">
+			<return id="error-id-cliente-invalido" />
+		</if>              
+
+		<!--25-->
+		<if test="(/request-context/request/message/body/convenio/msg/reglas_consulta/politica =2 or /request-context/request/message/body/convenio/agreements/response/policies/collector-channel/consultadeuda/consulta_deuda/msg/reglas_consulta/politica =3)  and  /request-context/request/message/body/parametrosBD/HAY_ID_SERVICIO = 2">
+			<return id="error-id-servicio-invalido" />
+		</if>
+		
+	
+		<!--A futuro se debe agregar una validación cuando se escoge la política todos--> 
+     				
+		<!--  Todas las validaciones OK -->
+		<return id="return" />
+	
+	</workflow>
+	
+	<workflow id="notificacion_pago" xsl-path="../etc/xsls/validaciones_clientehr/notificacion_pago">
+
+			<!--Validaciones de contenido y longitud-->
+
+			<!--00-->
+			<if test="/request-context/request/message/body/id_trx_rec ='' or string-length(/request-context/request/message/body/id_trx_rec) >32">
+				<return id="error-id_trx_rec_vacio"/>	
+			</if>
+
+			<!--01-->
+			<if test="/request-context/request/message/body/company_id ='' or string-length(/request-context/request/message/body/company_id) >25">
+				<return id="error-company_id_vacio"/>			
+			</if>
+			
+			<!--02-->
+			<!--Validación formato de la fecha-->
+			<echo id="valida_formato_iso8601" />
+
+			<if test="/request-context/services-responses/notificacion_pago/valida_formato_iso8601/response/code != 0">
+				<return id="error-payment_date_no_valido"/>
+			</if>
+
+			<!--03-->
+			<if test="/request-context/request/message/body/country_code ='' or string-length(/request-context/request/message/body/country_code) >2">
+				<return id="error-country_code_vacio"/>			
+			</if>
+
+			<!--04-->
+			<if test="/request-context/request/message/body/currency_code ='' or string-length(/request-context/request/message/body/currency_code) >3">
+				<return id="error-currency_code_vacio"/>			
+			</if>
+
+			<!--05-->
+			<if test="/request-context/request/message/body/contract_id ='' or string-length(/request-context/request/message/body/contract_id) >20">
+				<return id="error-contract_id_vacio"/>			
+			</if>
+
+			<!--06-->
+			<if test="/request-context/request/message/body/collector_id ='' or string-length(/request-context/request/message/body/collector_id) >25">
+				<return id="error-collector_id_vacio"/>			
+			</if>
+
+			<!--07-->
+			<if test="/request-context/request/message/body/channel ='' or string-length(/request-context/request/message/body/channel) >10">
+				<return id="error-channel_vacio"/>			
+			</if>
+
+			<!--08-->
+			<if test="/request-context/request/message/body/decimal_places ='' or string-length(/request-context/request/message/body/decimal_places) > 1">
+				<return id="error-decimal_places_vacio"/>			
+			</if>
+
+			<!--09-->
+			<!-- <if test="string-length(/request-context/request/message/body/settlement_date)>0">  -->
+			    <echo id="valida_yyyy_mm_dd" />
+
+				<if test="/request-context/services-responses/notificacion_pago/valida_yyyy_mm_dd/response/code != 0">
+					<return id="error-settlement_date_formato"/>
+				</if>
+            <!-- </if>  -->
+
+			<!--10-->
+			<if test="string-length(/request-context/request/message/body/transmitter) >3">
+				<return id="error-transmitter_largo"/>			
+			</if>
+
+			<!--11-->
+			<if test="string-length(/request-context/request/message/body/payment_type) >2">
+				<return id="error-payment_type_largo"/>			
+			</if>
+
+			<!--12-->
+			<if test="string-length(/request-context/request/message/body/payment_method) >3">
+				<return id="error-payment_method_largo"/>			
+			</if>
+
+			<!--Fin de validaciones de contenido y longitud-->
+
+			<!--Inicio de validaciones de negocio-->
+
+			<!--Esta validación lleva este número debido a que me olvidé de ponerla antes-->
+			<!--26-->
+			<if test="/request-context/request/message/body/id_trx_eft ='' or  /request-context/request/message/body/id_trx_eft/response/code != 0 ">
+				<return id="error-conexion-bd" />
+			</if>
+
+			<service id="buscar_id_trx_rec" name="TRANS" description="Se valida el id trx del recaudador" />	
+			
+			<!--13-->
+			<if test="count(/request-context/services-responses/notificacion_pago/buscar_id_trx_rec/response/data/Results/Row/EXISTE) > 0">		
+				<return id="error-id_trx_rec" />
+			</if>
+				
+			<!--14-->		
+			<if test="/request-context/request/message/body/convenio/msg/code" not-equals="0">
+				<return id="error-convenio" />
+			</if>
+			
+			<!--15-->
+			<if test="/request-context/request/message/body/convenio/msg/convenio_habilitado" not-equals="0">
+				<return id="error-estado-convenio" />
+			</if>
+	
+			<!--16-->
+			<if test="/request-context/request/message/body/collector_id  != /request-context/request/message/body/convenio/msg/collector-id">
+				<return id="error-collector-agreement" />
+			</if>
+	
+			<!--17-->
+			<if test="/request-context/request/message/body/company_id != /request-context/request/message/body/convenio/msg/company-id">
+				<return id="error-company-agreement" />
+			</if>
+										
+			<!--18-->
+			<if test="/request-context/request/message/body/convenio/msg/reglas_pago/moneda_pago != /request-context/request/message/body/currency_code">
+				<return id="error-moneda" />		
+			</if>
+
+			<!--19-->
+			<!--Este valo deberia estar en reglas generales-->
+			<if test="/request-context/request/message/body/convenio/msg/reglas_consulta/pais != /request-context/request/message/body/country_code">
+				<return id="error-pais" />		
+			</if>
+
+
+			<!--se realizan validaciones iterativas para todos los pagos que vienen en el mensaje-->
+			<!--20-->
+			<echo id="validar_service_id" />
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_service_id/response/code != 0">
+				<return id="error-service_id_vacio"/>
+			</if>
+
+			<!--21
+			<echo id="validar_client_id" />
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_client_id/response/code != 0">
+				<return id="error-client_id_vacio"/>
+			</if>
+                        -->
+
+			<!--22
+			<echo id="validar_document_id" />
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_document_id/response/code != 0">
+				<return id="error-document_id_vacio"/>
+			</if>
+                        -->
+
+			<!--23
+			<echo id="validar_folio" />
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_folio/response/code != 0">
+				<return id="error-folio_vacio"/>
+			</if>
+                        -->
+
+			<!--24-->
+			<echo id="validar_amount" />
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_amount/response/code != 0">
+				<return id="error-amount_vacio"/>
+			</if>
+
+			<!--25-->
+			<echo id="validar_monto_total" />
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_monto_total/response/code != 0">
+				<return id="error-monto_total"/>
+			</if>
+
+			<!--27-->
+			<!--Se refiere a los pagos duplicados dentro de la misma notificacion, no en relación a la base de datos-->
+			<echo id="validar_pagos_unicos"/>
+			<echo id="buscar_pagos_duplicados"/>
+			
+			<if test="/request-context/services-responses/notificacion_pago/buscar_pagos_duplicados/response/code !=0">
+				<return id="error-pagos_duplicados"/>
+			</if>
+
+			<!--29-->
+			<!--Validacion del canal-->
+			<echo id="valida_canal"/>
+			<if test="/request-context/services-responses/notificacion_pago/valida_canal/response/code != 0">
+				<return id="error-channel_incorrecto"/>
+			</if>
+
+			<!--28-->
+			<!--Se valida que el tipo de pago, en caso de venir este activado en el convenio-->
+			<!--De momento no se sabe como se va a enviar el mensaje, si sera obligacion o no que envie el tipo de pago, ni tampoco si pueden combibir uno o mas tipos de pago-->
+			<echo id="validar_tipo_pago"/>
+
+			<if test="/request-context/services-responses/notificacion_pago/validar_tipo_pago/response/code != '0'">
+				<return id="error-tipo_pago"/>
+			</if>
+
+			<!--30-->
+			<!--Se valida el medio de pago, siempre y cuando haya sido informado, y el tipo de pago no sea pago mixto-->
+			<!--validacion no aplica para pagos mixtos-->
+			<echo id="validar_medio_pago"/>
+			
+			<if test="/request-context/services-responses/notificacion_pago/validar_medio_pago/response/code != '0'">
+				<return id="error_medio_pago"/>
+			</if>
+
+			<!--32-->
+			<!--Se valida que coincida el tipo de pago con el medio de pago-->
+			<if test="(/request-context/request/message/body/payment_type = 'PM' and  /request-context/request/message/body/payment_method != 'MPM') or (request-context/request/message/body/payment_method = 'MPM' and /request-context/request/message/body/payment_type != 'PM' )">
+				<return id="error_tipo_pago_mixto"/>
+			</if>
+
+
+			<!--Se validan los medios de pago que vienen a nivel de cada pago, siempre y cuanto el tipo de pago sea mixto y el medio de pago tambien-->
+			<if test="/request-context/request/message/body/payment_method = 'MPM'">
+
+				<echo id="valida_medios_pago_mixto"/>
+				<echo id="busca_mpm_errores"/>
+
+				<!--31-->
+				<if test="/request-context/services-responses/notificacion_pago/busca_mpm_errores/response/code != '0'">
+					<return id="error_medio_pago_mixto"/>
+				</if>
+
+				<echo id="valida_porcentajes_pago_mixto"/>
+				<echo id="busca_mpm_errores_porcentaje"/>
+
+				<!--33-->
+				<if test="/request-context/services-responses/notificacion_pago/busca_mpm_errores_porcentaje/response/code != '0'">
+					<return id="error_medios_pm_porcentaje"/>
+				</if>
+			</if>
+
+
+			<!--Fin de validaciones de negocio-->
+
+			<!--  Todas las validaciones OK -->
+			<return id="return" />
+	
+	</workflow>
+	
+	<workflow id="notificacion_pago_conciliacion" xsl-path="../etc/xsls/validaciones_clientehr/notificacion_pago_conciliacion">
+
+			<!--No se incluyen validaciones de longitud, campos vacios, etc-->
+
+			<!--Considerar si se validan las consultas del principio que nos permiten obtener parametros-->
+			<!--Inicio de validaciones de negocio-->
+
+			<!--00-->
+			<if test="/request-context/request/message/body/id_trx_eft ='' or  /request-context/request/message/body/id_trx_eft/response/code != 0 ">
+				<return id="error-conexion-bd" />
+			</if>
+
+			<!--No se realiza la validacion de ver si el id_trx_rec ya fue utilizado, ya que puede haberse usado en varios pagos-->
+				
+			<!--01-->		
+			<if test="/request-context/request/message/body/convenio/msg/code" not-equals="0">
+				<return id="error-convenio" />
+			</if>
+			
+			<!--02-->
+			<if test="/request-context/request/message/body/convenio/msg/convenio_habilitado" not-equals="0">
+				<return id="error-estado-convenio" />
+			</if>
+	
+			<!--03-->
+			<if test="/request-context/request/message/body/collector_id  != /request-context/request/message/body/convenio/msg/collector-id">
+				<return id="error-collector-agreement" />
+			</if>
+	
+			<!--04-->
+			<if test="/request-context/request/message/body/company_id != /request-context/request/message/body/convenio/msg/company-id">
+				<return id="error-company-agreement" />
+			</if>
+										
+			<!--05-->
+			<if test="/request-context/request/message/body/convenio/msg/moneda_pago != /request-context/request/message/body/currency_code">
+				<return id="error-moneda" />		
+			</if>
+
+			<!--06-->
+			<if test="/request-context/request/message/body/convenio/msg/pais != /request-context/request/message/body/country_code">
+				<return id="error-pais" />		
+			</if>
+
+
+			<!--07-->
+			<if test="/request-context/request/message/body/total_amount != /request-context/request/message/body/amount">	
+				<return id="error-monto_total"/>
+			</if>
+
+			<return id="return" />
+			<!--Fin de validaciones de negocio-->
+
+			<!--  Todas las validaciones OK -->
+	</workflow>
+
+
+ 
+	<!-- ============================================ CONSULTA DE PAGO ============================================ -->
+	<workflow id="consulta_pago" xsl-path="../etc/xsls/validaciones_clientehr/consulta_pago">
+	 
+		<echo id="ValidaDate" description="Evalua fecha trx ISO 8601" />
+		<if test="/request-context/services-responses/consulta_pago/ValidaDate/response/code !=0 ">
+	                <return id="error-fechatrx" />
+	    </if>
+		
+		<echo id="ValidafechaIni" description="Evalua fecha rango inicio" />
+		<if test="/request-context/services-responses/consulta_pago/ValidafechaIni/response/code !=0 ">
+	                <return id="error-fecha-inicio" />
+	    </if>
+		
+		<echo id="Validafechafin" description="Evalua fecha rango final" />
+		<if test="/request-context/services-responses/consulta_pago/Validafechafin/response/code !=0 ">
+	                <return id="error-fecha-fin" />
+	    </if>
+
+	    <if test="not(not(/request-context/request/message/body/date_type)) and /request-context/request/message/body/date_type != 'PAGO' and /request-context/request/message/body/date_type != 'NOTI'">
+		   <return id="error-tipofecha" />
+		</if>
+		
+		<if test="not(not(/request-context/request/message/body/company_id)) and string-length(/request-context/request/message/body/company_id) > 10 ">
+			<return id="error-company_id_invalido" />
+		</if>
+		
+		<if test="not(not(/request-context/request/message/body/country_code)) and string-length(/request-context/request/message/body/country_code) > 2 ">
+			<return id="error-country_code_invalido" />
+		</if>
+
+		<if test="not(not(/request-context/request/message/body/service_id)) and string-length(/request-context/request/message/body/service_id) > 20 ">
+			<return id="error-service_id_invalido" />
+		</if>
+
+		<if test="not(not(/request-context/request/message/body/client_id)) and string-length(/request-context/request/message/body/client_id) > 20 ">
+			<return id="error-client_id_invalido" />
+		</if>
+
+		<if test="not(not(/request-context/request/message/body/folio)) and string-length(/request-context/request/message/body/folio) > 20 ">
+			<return id="error-folio_invalido" />
+		</if>
+
+		<if test="not(not(/request-context/request/message/body/collector_id)) and string-length(/request-context/request/message/body/collector_id) > 30 ">
+			<return id="error-collector_id_invalido" />
+		</if>
+
+		<if test="not(not(/request-context/request/message/body/contract_id)) and string-length(/request-context/request/message/body/contract_id) > 20 ">
+			<return id="error-contract_id_invalido" />
+		</if>
+		
+		<!--  Todas las validaciones OK -->
+		<return id="return" />	
+    
+	</workflow>
+
+
+
+	<workflow id="consulta_pagoc" xsl-path="../etc/xsls/validaciones_clientehr/consulta_pago">
+	 
+	 <if test="not(not(/request-context/request/message/body/contract_id)) and /request-context/request/message/body/contract_id != '' ">	 
+		 <!--<service id="convenio" name="CONV1" description="Rescata datos del convenio"/>-->
+		 <!--<if test="/request-context/services-responses/consulta_pagoc/convenio/agreements/code != 0 ">-->
+		<if test="/request-context/services-responses/default/convenio/msg/code != 0 ">
+					<return id="error-convenio" />
+		</if> 
+	</if> 
+	
+    
+	<if test="/request-context/services-responses/default/convenio/msg/company-id != /request-context/request/message/body/company_id">
+			   <return id="error-company_id_noexiste" />
+	</if>
+
+    <if test="not(not(/request-context/request/message/body/collector_id)) and /request-context/request/message/body/collector_id != '' ">
+		 <if test="/request-context/services-responses/default/convenio/msg/collector-id != /request-context/request/message/body/collector_id">
+				<return id="error-collector_id_noexiste" />
+		</if>
+	</if>
+	<if test="not(not(/request-context/request/message/body/starting_date)) and not(not(/request-context/request/message/body/end_date))">
+	
+	<echo id="Validarangofechas" description="Evalua fecha inicio" />
+		<if test="/request-context/services-responses/consulta_pagoc/Validarangofechas/response/code !=0 ">
+					<return id="error-rango_fechas" />
+		</if>
+	</if>
+	
+	<return id="return" />	
+    
+	</workflow>
+	
+</workflows>
